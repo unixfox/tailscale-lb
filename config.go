@@ -36,6 +36,8 @@ type configuration struct {
 	authKey    string
 	controlURL string
 	stateDir   string
+	sqlDriver  string
+	sqlDSN     string
 	ports      map[uint16]portConfig
 }
 
@@ -68,6 +70,12 @@ func (cfg *configuration) fill(source configer) error {
 	}
 	if cfg.controlURL == "" {
 		cfg.controlURL = source.Get("", "control-url")
+	}
+	if cfg.sqlDriver == "" {
+		cfg.sqlDriver = source.Get("", "sql-driver")
+	}
+	if cfg.sqlDSN == "" {
+		cfg.sqlDSN = source.Get("", "sql-dsn")
 	}
 	if cfg.stateDir == "" {
 		if v := source.Value("", "state-directory"); v != nil {

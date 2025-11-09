@@ -44,6 +44,11 @@ import (
 	"zombiezen.com/go/log"
 	"zombiezen.com/go/log/zstdlog"
 	"zombiezen.com/go/xcontext"
+
+	// Database drivers for SQL state store
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const programName = "tailscale-lb"
@@ -128,7 +133,20 @@ func run(ctx context.Context, cfg *configuration) error {
 	if cfg.controlURL != "" {
 		srv.ControlURL = cfg.controlURL
 	}
-	if cfg.stateDir != "" {
+	
+	// Configure state storage
+	if cfg.sqlDriver != "" && cfg.sqlDSN != "" {
+		// Use SQL-backed state store
+		sqlStore, err := NewSQLStore(cfg.sqlDriver, cfg.sqlDSN)
+		if err != nil {
+			return fmt.Errorf("failed to create SQL store: %w", err)
+		}
+		defer sqlStore.Close()
+		srv.Ephemeral = false
+		srv.Store = sqlStore
+		log.Infof(ctx, "Using SQL state store with driver: %s", cfg.sqlDriver)
+	} else if cfg.stateDir != "" {
+		// Use file-backed state store
 		srv.Ephemeral = false
 		srv.Dir = cfg.stateDir
 		// NewFileStore is responsible for creating its directory.
@@ -137,7 +155,11 @@ func run(ctx context.Context, cfg *configuration) error {
 		if err != nil {
 			return err
 		}
+		log.Infof(ctx, "Using file-backed state store in: %s", cfg.stateDir)
+	} else {
+		log.Infof(ctx, "Using ephemeral in-memory state store")
 	}
+	
 	if err := srv.Start(); err != nil {
 		return err
 	}
