@@ -67,11 +67,26 @@ hostname = example
 # If you don't provide an auth key,
 # tailscale-lb will log a URL to visit in your browser to authenticate it.
 auth-key = tskey-foo
-# (Optional) If given, the load balancer will be non-ephemeral
+
+# State persistence options (choose one):
+
+# Option 1: File-based storage (default for non-ephemeral nodes)
+# If given, the load balancer will be non-ephemeral
 # and persist state in the given directory.
-# If the path is relative, it resolved relative to
+# If the path is relative, it is resolved relative to
 # the directory the configuration file is located in.
 state-directory = /var/lib/tailscale-lb
+
+# Option 2: SQL database storage (PostgreSQL, MySQL, or SQLite)
+# Use this for production HA deployments or shared state across multiple instances.
+# See SQL_STORE.md for detailed setup instructions.
+# sql-driver = postgres
+# sql-dsn = postgres://user:password@localhost:5432/tailscale_lb?sslmode=require
+
+# Examples:
+# PostgreSQL: sql-dsn = postgres://user:password@host:5432/dbname?sslmode=require
+# MySQL:      sql-dsn = user:password@tcp(host:3306)/dbname
+# SQLite:     sql-dsn = file:/var/lib/tailscale-lb/state.db?cache=shared&mode=rwc
 
 # (Optional) Specify the coordination server URL
 # control-url = https://headscale.example
@@ -133,6 +148,48 @@ tailscale-lb foo.ini
 
 You can then see the load balancer's IP address in the logs
 or in the Tailscale admin console.
+
+## SQL State Storage
+
+tailscale-lb supports persistent state storage in SQL databases for production deployments. This enables:
+
+- **High Availability**: Share state across multiple load balancer instances
+- **Durability**: Use enterprise database backup and recovery tools
+- **Flexibility**: Deploy on cloud platforms without persistent volumes
+
+### Supported Databases
+
+- **PostgreSQL** - Recommended for production HA deployments
+- **MySQL/MariaDB** - Good for existing MySQL infrastructure
+- **SQLite** - Suitable for single-node deployments
+
+### Quick Example
+
+```ini
+hostname = my-loadbalancer
+auth-key = tskey-auth-YOUR_KEY
+
+# Use PostgreSQL for state storage
+sql-driver = postgres
+sql-dsn = postgres://user:password@localhost:5432/tailscale_lb?sslmode=require
+
+[tcp 22]
+backend = 127.0.0.1:22
+```
+
+### High Availability Setup
+
+Multiple tailscale-lb instances can share the same PostgreSQL database:
+
+```
+Instance 1 ──┐
+             ├──▶ PostgreSQL (shared state)
+Instance 2 ──┘
+```
+
+Each instance uses a unique `hostname` but shares the same `sql-dsn`.
+
+For complete setup instructions, configuration examples, and deployment guides, see **[SQL_STORE.md](SQL_STORE.md)**.
 
 ## License
 
