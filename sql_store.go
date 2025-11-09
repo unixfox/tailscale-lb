@@ -36,7 +36,7 @@ type SQLStore struct {
 var _ ipn.StateStore = (*SQLStore)(nil)
 
 // NewSQLStore creates a new SQL-backed state store.
-// Supported drivers: "postgres", "mysql", "sqlite3"
+// Supported drivers: "postgres" (alias for "pgx"), "pgx", "mysql", "sqlite3"
 func NewSQLStore(driver, dsn string) (*SQLStore, error) {
 	return NewSQLStoreWithTable(driver, dsn, "tailscale_state")
 }
@@ -50,7 +50,13 @@ func NewSQLStoreWithTable(driver, dsn, table string) (*SQLStore, error) {
 		return nil, fmt.Errorf("sql store: dsn cannot be empty")
 	}
 
-	db, err := sql.Open(driver, dsn)
+	// For backwards compatibility, treat "postgres" as an alias for "pgx"
+	actualDriver := driver
+	if driver == "postgres" {
+		actualDriver = "pgx"
+	}
+
+	db, err := sql.Open(actualDriver, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("sql store: open database: %w", err)
 	}
@@ -80,7 +86,7 @@ func (s *SQLStore) init() error {
 	var createTableSQL string
 
 	switch s.driver {
-	case "postgres":
+	case "postgres", "pgx":
 		createTableSQL = fmt.Sprintf(`
 			CREATE TABLE IF NOT EXISTS %s (
 				key TEXT PRIMARY KEY,
@@ -136,7 +142,7 @@ func (s *SQLStore) WriteState(key ipn.StateKey, value []byte) error {
 	var query string
 
 	switch s.driver {
-	case "postgres":
+	case "postgres", "pgx":
 		query = fmt.Sprintf(`
 			INSERT INTO %s (key, value, updated_at)
 			VALUES ($1, $2, $3)
@@ -182,7 +188,7 @@ func (s *SQLStore) Cleanup(olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
 
 	switch s.driver {
-	case "postgres":
+	case "postgres", "pgx":
 		query = fmt.Sprintf("DELETE FROM %s WHERE updated_at < $1", s.table)
 		_, err := s.db.Exec(query, cutoff)
 		return err
